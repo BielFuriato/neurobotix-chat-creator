@@ -15,7 +15,8 @@ import {
   Link, 
   Copy,
   Check,
-  ExternalLink
+  ExternalLink,
+  Calendar
 } from 'lucide-react';
 
 interface IntegrationsProps {
@@ -26,6 +27,7 @@ export const Integrations = ({ chatbot }: IntegrationsProps) => {
   const [whatsappEnabled, setWhatsappEnabled] = useState(chatbot.integrations?.whatsapp || false);
   const [messengerEnabled, setMessengerEnabled] = useState(chatbot.integrations?.messenger || false);
   const [websiteEnabled, setWebsiteEnabled] = useState(chatbot.integrations?.website || true);
+  const [googleCalendarEnabled, setGoogleCalendarEnabled] = useState(chatbot.integrations?.googleCalendar || false);
   const [apiKey] = useState('nb_ak_' + Math.random().toString(36).substr(2, 20));
   const [copied, setCopied] = useState<string | null>(null);
   const { toast } = useToast();
@@ -76,6 +78,74 @@ export const Integrations = ({ chatbot }: IntegrationsProps) => {
 
   return (
     <div className="space-y-6">
+      {/* Google Calendar */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <CardTitle>Google Calendar</CardTitle>
+                <CardDescription>
+                  Permita agendamentos automáticos via chatbot
+                </CardDescription>
+              </div>
+            </div>
+            <Switch checked={googleCalendarEnabled} onCheckedChange={setGoogleCalendarEnabled} />
+          </div>
+        </CardHeader>
+        {googleCalendarEnabled && (
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+              <p className="text-sm text-muted-foreground mb-2">
+                Para conectar ao Google Calendar, você precisa:
+              </p>
+              <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
+                <li>Conta Google ativa</li>
+                <li>Autorização para acessar o Google Calendar</li>
+                <li>Configurar disponibilidade de horários</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="calendar-id">ID do Calendário</Label>
+              <Input
+                id="calendar-id"
+                placeholder="exemplo@gmail.com ou calendar-id"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="default-duration">Duração Padrão (minutos)</Label>
+              <Input
+                id="default-duration"
+                type="number"
+                placeholder="30"
+                defaultValue="30"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="buffer-time">Tempo de Buffer (minutos)</Label>
+              <Input
+                id="buffer-time"
+                type="number"
+                placeholder="15"
+                defaultValue="15"
+              />
+            </div>
+            <div className="flex space-x-2">
+              <Button variant="outline" size="sm">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Conectar com Google
+              </Button>
+              <Button variant="outline" size="sm">
+                Configurar Horários
+              </Button>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
       {/* WhatsApp */}
       <Card>
         <CardHeader>

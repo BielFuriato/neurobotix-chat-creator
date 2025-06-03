@@ -36,7 +36,8 @@ const ChatbotManagement = () => {
     integrations: {
       whatsapp: false,
       messenger: false,
-      website: true
+      website: true,
+      googleCalendar: false
     },
     schedule: {
       enabled: true,
@@ -52,9 +53,9 @@ const ChatbotManagement = () => {
       <Header />
       
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center">
+        {/* Header - Layout corrigido */}
+        <div className="mb-8">
+          <div className="flex items-center mb-6">
             <Button 
               variant="ghost" 
               onClick={() => navigate('/dashboard')}
@@ -63,36 +64,41 @@ const ChatbotManagement = () => {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Dashboard
             </Button>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
-                <Bot className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold">{chatbot.name}</h1>
-                <p className="text-muted-foreground">Gerencie e configure seu chatbot</p>
-              </div>
-            </div>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <TestBot chatbot={chatbot} />
-            <Button variant="outline">
-              Publicar
-            </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Bot className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold">{chatbot.name}</h1>
+                <p className="text-muted-foreground text-sm sm:text-base">Gerencie e configure seu chatbot</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <TestBot chatbot={chatbot} />
+              <Button variant="outline">
+                Publicar
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Tabs de Configuração */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="general">Geral</TabsTrigger>
-            <TabsTrigger value="training">Treinamento</TabsTrigger>
-            <TabsTrigger value="customization">Personalização</TabsTrigger>
-            <TabsTrigger value="integrations">Integrações</TabsTrigger>
-            <TabsTrigger value="metrics">Métricas</TabsTrigger>
-            <TabsTrigger value="settings">Configurações</TabsTrigger>
-            <TabsTrigger value="test">Teste</TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto">
+            <TabsList className="grid w-full grid-cols-7 min-w-[700px]">
+              <TabsTrigger value="general">Geral</TabsTrigger>
+              <TabsTrigger value="training">Treinamento</TabsTrigger>
+              <TabsTrigger value="customization">Personalização</TabsTrigger>
+              <TabsTrigger value="integrations">Integrações</TabsTrigger>
+              <TabsTrigger value="metrics">Métricas</TabsTrigger>
+              <TabsTrigger value="settings">Configurações</TabsTrigger>
+              <TabsTrigger value="test">Teste</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="general">
             <GeneralInfo chatbot={chatbot} />
