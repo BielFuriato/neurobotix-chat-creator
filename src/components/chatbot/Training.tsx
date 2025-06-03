@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,18 +14,13 @@ import {
   MessageSquare, 
   Trash2,
   Plus,
-  Book
+  Book,
+  CheckCircle,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
-
-interface TrainingData {
-  documents: Array<{
-    id: string;
-    name: string;
-    type: 'pdf' | 'doc' | 'url' | 'faq';
-    status: 'processed' | 'processing' | 'failed';
-    addedAt: string;
-  }>;
-}
+import { trainingService } from '@/lib/training-service';
+import { KnowledgeBase } from '@/lib/database';
 
 interface TrainingProps {
   chatbot: any;
@@ -36,31 +31,22 @@ export const Training = ({ chatbot }: TrainingProps) => {
   const [newUrl, setNewUrl] = useState('');
   const [newFaq, setNewFaq] = useState({ question: '', answer: '' });
   const [isLoading, setIsLoading] = useState(false);
+  const [documents, setDocuments] = useState<KnowledgeBase[]>([]);
   const { toast } = useToast();
 
-  const [documents, setDocuments] = useState<TrainingData['documents']>([
-    {
-      id: '1',
-      name: 'Manual de Produtos.pdf',
-      type: 'pdf',
-      status: 'processed',
-      addedAt: '2024-01-15'
-    },
-    {
-      id: '2',
-      name: 'FAQ Suporte.docx',
-      type: 'doc',
-      status: 'processed',
-      addedAt: '2024-01-14'
-    },
-    {
-      id: '3',
-      name: 'https://site.com/ajuda',
-      type: 'url',
-      status: 'processing',
-      addedAt: '2024-01-16'
+  // Carregar documentos ao montar componente
+  useEffect(() => {
+    loadDocuments();
+  }, [chatbot.id]);
+
+  const loadDocuments = async () => {
+    try {
+      const docs = await trainingService.getTrainingDocuments(parseInt(chatbot.id));
+      setDocuments(docs);
+    } catch (error) {
+      console.error('Erro ao carregar documentos:', error);
     }
-  ]);
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -68,85 +54,43 @@ export const Training = ({ chatbot }: TrainingProps) => {
 
     setIsLoading(true);
     try {
-      for (const file of files) {
-        const newDoc = {
-          id: Date.now().toString(),
-          name: file.name,
-          type: file.type.includes('pdf') ? 'pdf' as const : 'doc' as const,
-          status: 'processing' as const,
-          addedAt: new Date().toISOString().split('T')[0]
-        };
-        setDocuments(prev => [...prev, newDoc]);
-      }
+      await trainingService.processFileUpload(files, parseInt(chatbot.id));
+      await loadDocuments();
       
       toast({
         title: "Documentos carregados!",
-        description: "Os documentos estão sendo processados.",
+        description: `${files.length} documento(s) processado(s) com sucesso.`,
       });
     } catch (error) {
       toast({
         title: "Erro no upload",
-        description: "Tente novamente mais tarde",
+        description: "Erro ao processar documentos. Tente novamente.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+      // Limpar input
+      event.target.value = '';
     }
   };
 
   const handleAddUrl = async () => {
     if (!newUrl) return;
     
-    const newDoc = {
-      id: Date.now().toString(),
-      name: newUrl,
-      type: 'url' as const,
-      status: 'processing' as const,
-      addedAt: new Date().toISOString().split('T')[0]
-    };
-    
-    setDocuments(prev => [...prev, newDoc]);
-    setNewUrl('');
-    
-    toast({
-      title: "URL adicionada!",
-      description: "O conteúdo da URL está sendo processado.",
-    });
-  };
-
-  const handleAddFaq = async () => {
-    if (!newFaq.question || !newFaq.answer) return;
-    
-    const newDoc = {
-      id: Date.now().toString(),
-      name: `FAQ: ${newFaq.question}`,
-      type: 'faq' as const,
-      status: 'processed' as const,
-      addedAt: new Date().toISOString().split('T')[0]
-    };
-    
-    setDocuments(prev => [...prev, newDoc]);
-    setNewFaq({ question: '', answer: '' });
-    
-    toast({
-      title: "FAQ adicionada!",
-      description: "A pergunta e resposta foram adicionadas ao conhecimento.",
-    });
-  };
-
-  const handleSaveKnowledge = async () => {
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await trainingService.processUrl(newUrl, parseInt(chatbot.id));
+      await loadDocuments();
+      setNewUrl('');
+      
       toast({
-        title: "Conhecimento salvo!",
-        description: "O conhecimento personalizado foi adicionado.",
+        title: "URL adicionada!",
+        description: "O conteúdo da URL foi processado com sucesso.",
       });
-      setCustomKnowledge('');
     } catch (error) {
       toast({
-        title: "Erro ao salvar",
-        description: "Tente novamente mais tarde",
+        title: "Erro ao processar URL",
+        description: "Verifique se a URL está correta e tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -154,30 +98,78 @@ export const Training = ({ chatbot }: TrainingProps) => {
     }
   };
 
-  const removeDocument = (id: string) => {
-    setDocuments(prev => prev.filter(doc => doc.id !== id));
-    toast({
-      title: "Documento removido",
-      description: "O documento foi removido do treinamento.",
-    });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'processed': return 'bg-green-500';
-      case 'processing': return 'bg-yellow-500';
-      case 'failed': return 'bg-red-500';
-      default: return 'bg-gray-500';
+  const handleAddFaq = async () => {
+    if (!newFaq.question || !newFaq.answer) return;
+    
+    setIsLoading(true);
+    try {
+      await trainingService.addFaq(newFaq.question, newFaq.answer, parseInt(chatbot.id));
+      await loadDocuments();
+      setNewFaq({ question: '', answer: '' });
+      
+      toast({
+        title: "FAQ adicionada!",
+        description: "A pergunta e resposta foram adicionadas ao conhecimento.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao adicionar FAQ",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'processed': return 'Processado';
-      case 'processing': return 'Processando';
-      case 'failed': return 'Falhou';
-      default: return 'Desconhecido';
+  const handleSaveKnowledge = async () => {
+    if (!customKnowledge.trim()) return;
+
+    setIsLoading(true);
+    try {
+      await trainingService.addCustomKnowledge(customKnowledge, parseInt(chatbot.id));
+      await loadDocuments();
+      setCustomKnowledge('');
+      
+      toast({
+        title: "Conhecimento salvo!",
+        description: "O conhecimento personalizado foi adicionado com sucesso.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao salvar",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const removeDocument = async (id: number) => {
+    try {
+      await trainingService.removeTrainingDocument(id);
+      await loadDocuments();
+      
+      toast({
+        title: "Documento removido",
+        description: "O documento foi removido do treinamento.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao remover",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getStatusColor = (sourceType: string) => {
+    return 'bg-green-500'; // Todos processados com sucesso
+  };
+
+  const getStatusText = () => {
+    return 'Processado';
   };
 
   const getTypeIcon = (type: string) => {
@@ -189,13 +181,67 @@ export const Training = ({ chatbot }: TrainingProps) => {
         return Link;
       case 'faq':
         return MessageSquare;
+      case 'custom':
+        return Book;
       default:
         return FileText;
     }
   };
 
+  const getSourceTypeLabel = (type: string) => {
+    switch (type) {
+      case 'pdf': return 'PDF';
+      case 'doc': return 'Documento';
+      case 'url': return 'URL';
+      case 'faq': return 'FAQ';
+      case 'custom': return 'Personalizado';
+      default: return 'Documento';
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Estatísticas de Treinamento */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              <div>
+                <p className="text-sm text-muted-foreground">Documentos</p>
+                <p className="text-2xl font-bold">{documents.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <div>
+                <p className="text-sm text-muted-foreground">Processados</p>
+                <p className="text-2xl font-bold">{documents.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Book className="w-5 h-5 text-purple-600" />
+              <div>
+                <p className="text-sm text-muted-foreground">Base de Conhecimento</p>
+                <p className="text-2xl font-bold">
+                  {documents.reduce((acc, doc) => acc + doc.content.length, 0) > 0 ? 'Ativa' : 'Vazia'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Upload de Documentos */}
       <Card>
         <CardHeader>
@@ -211,18 +257,19 @@ export const Training = ({ chatbot }: TrainingProps) => {
           <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
             <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-lg font-medium mb-2">Arraste arquivos aqui ou clique para selecionar</p>
-            <p className="text-muted-foreground mb-4">Suportamos PDF, DOC, DOCX até 10MB</p>
+            <p className="text-muted-foreground mb-4">Suportamos PDF, DOC, DOCX, TXT até 10MB</p>
             <input
               type="file"
               multiple
-              accept=".pdf,.doc,.docx"
+              accept=".pdf,.doc,.docx,.txt"
               onChange={handleFileUpload}
               className="hidden"
               id="file-upload"
+              disabled={isLoading}
             />
-            <Button asChild>
+            <Button asChild disabled={isLoading}>
               <label htmlFor="file-upload" className="cursor-pointer">
-                Selecionar Arquivos
+                {isLoading ? "Processando..." : "Selecionar Arquivos"}
               </label>
             </Button>
           </div>
@@ -247,10 +294,11 @@ export const Training = ({ chatbot }: TrainingProps) => {
               value={newUrl}
               onChange={(e) => setNewUrl(e.target.value)}
               className="flex-1"
+              disabled={isLoading}
             />
-            <Button onClick={handleAddUrl}>
+            <Button onClick={handleAddUrl} disabled={isLoading || !newUrl}>
               <Plus className="w-4 h-4 mr-2" />
-              Adicionar
+              {isLoading ? "Adicionando..." : "Adicionar"}
             </Button>
           </div>
         </CardContent>
@@ -274,6 +322,7 @@ export const Training = ({ chatbot }: TrainingProps) => {
               placeholder="Como posso cancelar meu pedido?"
               value={newFaq.question}
               onChange={(e) => setNewFaq({...newFaq, question: e.target.value})}
+              disabled={isLoading}
             />
           </div>
           <div className="space-y-2">
@@ -283,11 +332,15 @@ export const Training = ({ chatbot }: TrainingProps) => {
               value={newFaq.answer}
               onChange={(e) => setNewFaq({...newFaq, answer: e.target.value})}
               rows={3}
+              disabled={isLoading}
             />
           </div>
-          <Button onClick={handleAddFaq}>
+          <Button 
+            onClick={handleAddFaq} 
+            disabled={isLoading || !newFaq.question || !newFaq.answer}
+          >
             <Plus className="w-4 h-4 mr-2" />
-            Adicionar FAQ
+            {isLoading ? "Adicionando..." : "Adicionar FAQ"}
           </Button>
         </CardContent>
       </Card>
@@ -309,8 +362,12 @@ export const Training = ({ chatbot }: TrainingProps) => {
             value={customKnowledge}
             onChange={(e) => setCustomKnowledge(e.target.value)}
             rows={6}
+            disabled={isLoading}
           />
-          <Button onClick={handleSaveKnowledge} disabled={isLoading || !customKnowledge}>
+          <Button 
+            onClick={handleSaveKnowledge} 
+            disabled={isLoading || !customKnowledge.trim()}
+          >
             {isLoading ? "Salvando..." : "Salvar Conhecimento"}
           </Button>
         </CardContent>
@@ -319,41 +376,72 @@ export const Training = ({ chatbot }: TrainingProps) => {
       {/* Histórico de Documentos */}
       <Card>
         <CardHeader>
-          <CardTitle>Documentos Treinados</CardTitle>
+          <CardTitle>Base de Conhecimento</CardTitle>
           <CardDescription>
-            Histórico de todos os documentos e conteúdos utilizados no treinamento
+            Todos os documentos e conteúdos utilizados no treinamento
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {documents.map((doc) => {
-              const Icon = getTypeIcon(doc.type);
-              return (
-                <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <Icon className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">{doc.name}</p>
-                      <p className="text-sm text-muted-foreground">Adicionado em {doc.addedAt}</p>
+          {documents.length === 0 ? (
+            <div className="text-center py-8">
+              <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">Nenhum documento adicionado ainda</p>
+              <p className="text-sm text-muted-foreground">Adicione documentos, URLs ou FAQs para treinar seu chatbot</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {documents.map((doc) => {
+                const Icon = getTypeIcon(doc.sourceType);
+                return (
+                  <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <Icon className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">{doc.fileName}</p>
+                        <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                          <span>Tipo: {getSourceTypeLabel(doc.sourceType)}</span>
+                          <span>•</span>
+                          <span>Adicionado em {new Date(doc.uploadedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="secondary" className="flex items-center space-x-1">
+                        <div className={`w-2 h-2 rounded-full ${getStatusColor(doc.sourceType)}`} />
+                        <span>{getStatusText()}</span>
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeDocument(doc.id!)}
+                        disabled={isLoading}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary" className="flex items-center space-x-1">
-                      <div className={`w-2 h-2 rounded-full ${getStatusColor(doc.status)}`} />
-                      <span>{getStatusText(doc.status)}</span>
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeDocument(doc.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Instruções para API */}
+      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+        <CardHeader>
+          <CardTitle className="flex items-center text-amber-800 dark:text-amber-200">
+            <AlertCircle className="w-5 h-5 mr-2" />
+            Configuração da API OpenAI
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-amber-700 dark:text-amber-300">
+            Para que o chatbot funcione, você precisa configurar sua chave da API OpenAI no arquivo 
+            <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded mx-1">src/lib/gpt-service.ts</code>.
+            Substitua <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded mx-1">YOUR_API_KEY</code> 
+            pela sua chave real da OpenAI.
+          </p>
         </CardContent>
       </Card>
     </div>
