@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Header } from '@/components/Header';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { database } from '@/lib/database';
 import { Bot, ArrowLeft } from 'lucide-react';
 
 const CreateChatbot = () => {
@@ -18,14 +20,33 @@ const CreateChatbot = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!user?.id) {
+      toast({
+        title: "Erro",
+        description: "Usuário não encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      // Simular criação do chatbot
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const chatbotData = {
+        userId: parseInt(user.id),
+        name,
+        description,
+        sector,
+        status: 'training' as const,
+        createdAt: new Date().toISOString()
+      };
+
+      const chatbotId = await database.createChatbot(chatbotData);
       
       toast({
         title: "Chatbot criado com sucesso!",
@@ -33,8 +54,9 @@ const CreateChatbot = () => {
       });
       
       // Navegar para a página de configuração do chatbot
-      navigate('/chatbot/1');
+      navigate(`/chatbot/${chatbotId}`);
     } catch (error) {
+      console.error('Erro ao criar chatbot:', error);
       toast({
         title: "Erro ao criar chatbot",
         description: "Tente novamente mais tarde",

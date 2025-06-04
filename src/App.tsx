@@ -12,6 +12,7 @@ import CreateChatbot from './pages/CreateChatbot';
 import ChatbotManagement from './pages/ChatbotManagement';
 import NotFound from './pages/NotFound';
 import { database } from './lib/database';
+import { createDemoUser } from './lib/demo-data';
 import './App.css';
 
 // Componente para rotas protegidas
@@ -33,6 +34,10 @@ function App() {
       try {
         await database.init();
         console.log('Banco de dados inicializado com sucesso');
+        
+        // Criar dados demo se não existirem
+        await createDemoUser();
+        console.log('Dados demo verificados/criados');
       } catch (error) {
         console.error('Erro ao inicializar banco de dados:', error);
       }
