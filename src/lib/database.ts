@@ -177,6 +177,35 @@ class Database {
     });
   }
 
+  async deleteChatbot(chatbotId: number): Promise<void> {
+    const transaction = this.db!.transaction(['chatbots', 'settings', 'knowledge_base', 'interactions'], 'readwrite');
+    const chatbotsStore = transaction.objectStore('chatbots');
+    const settingsStore = transaction.objectStore('settings');
+    const knowledgeStore = transaction.objectStore('knowledge_base');
+    const interactionsStore = transaction.objectStore('interactions');
+
+    chatbotsStore.delete(chatbotId);
+    settingsStore.delete(chatbotId);
+
+    // Exclui todos os conhecimentos e interações relacionados ao chatbot
+    const knowledgeIndex = knowledgeStore.index('chatbotId');
+    const knowledgeRequest = knowledgeIndex.getAllKeys(chatbotId);
+    knowledgeRequest.onsuccess = () => {
+      knowledgeRequest.result.forEach((key: IDBValidKey) => knowledgeStore.delete(key));
+    };
+
+    const interactionsIndex = interactionsStore.index('chatbotId');
+    const interactionsRequest = interactionsIndex.getAllKeys(chatbotId);
+    interactionsRequest.onsuccess = () => {
+      interactionsRequest.result.forEach((key: IDBValidKey) => interactionsStore.delete(key));
+    };
+
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
   // Knowledge base methods
   async addKnowledge(knowledge: Omit<KnowledgeBase, 'id'>): Promise<number> {
     const transaction = this.db!.transaction(['knowledge_base'], 'readwrite');

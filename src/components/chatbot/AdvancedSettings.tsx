@@ -1,4 +1,5 @@
 
+import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { database } from '@/lib/database';
 import { 
   Clock, 
   Shield, 
@@ -27,6 +29,7 @@ export const AdvancedSettings = ({ chatbot }: AdvancedSettingsProps) => {
   const [fallbackEnabled, setFallbackEnabled] = useState(chatbot.fallbackHuman || false);
   const [autoResponse, setAutoResponse] = useState(true);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleSave = async () => {
     try {
@@ -44,11 +47,21 @@ export const AdvancedSettings = ({ chatbot }: AdvancedSettingsProps) => {
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Tem certeza que deseja excluir este chatbot? Esta ação não pode ser desfeita.')) {
-      toast({
-        title: "Chatbot excluído",
-        description: "O chatbot foi removido permanentemente.",
-      });
+    if (window.confirm("Tem certeza que deseja excluir este chatbot? Esta ação não pode ser desfeita.")) {
+      try {
+        await database.deleteChatbot(chatbot.id);
+        toast({
+          title: "Chatbot excluído!",
+          description: "O chatbot foi removido com sucesso.",
+        });
+        navigate('/dashboard');
+      } catch (error) {
+        toast({
+          title: "Erro ao excluir",
+          description: "Tente novamente mais tarde",
+          variant: "destructive",
+        });
+      }
     }
   };
 
