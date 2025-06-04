@@ -1,10 +1,10 @@
-
 // Configuração do IndexedDB para armazenamento local
 interface User {
   id?: number;
   email: string;
   password: string;
   name: string;
+  company?: string;
   createdAt: string;
 }
 
@@ -102,8 +102,14 @@ class Database {
     const request = store.add(user);
     
     return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result as number);
-      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        console.log('Usuário salvo no IndexedDB com ID:', request.result);
+        resolve(request.result as number);
+      };
+      request.onerror = () => {
+        console.error('Erro ao salvar usuário:', request.error);
+        reject(request.error);
+      };
     });
   }
 
@@ -114,8 +120,14 @@ class Database {
     const request = index.get(email);
 
     return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        console.log('Busca por email resultado:', request.result);
+        resolve(request.result || null);
+      };
+      request.onerror = () => {
+        console.error('Erro ao buscar usuário:', request.error);
+        reject(request.error);
+      };
     });
   }
 
