@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,11 +30,12 @@ export const TestBot = ({ chatbot }: TestBotProps) => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Scroll automático para o final
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
@@ -54,7 +54,6 @@ export const TestBot = ({ chatbot }: TestBotProps) => {
     setIsLoading(true);
 
     try {
-      // Usar o chat service para obter resposta
       const botResponse = await chatService.sendMessage(
         parseInt(chatbot.id),
         inputMessage,
@@ -107,11 +106,11 @@ export const TestBot = ({ chatbot }: TestBotProps) => {
             Teste do {chatbot.name}
           </DialogTitle>
         </DialogHeader>
-        
-        <div className="flex-1 flex flex-col">
-          {/* Área de mensagens */}
-          <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
-            <div className="space-y-4">
+
+        {/* Conteúdo de mensagens com scroll */}
+        <div className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full pr-4">
+            <div className="flex flex-col space-y-4 px-4 py-2">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -125,12 +124,12 @@ export const TestBot = ({ chatbot }: TestBotProps) => {
                     </div>
                   )}
                   
-                  <Card className={`max-w-[80%] p-3 ${
+                  <Card className={`max-w-[75%] break-words p-3 ${
                     message.sender === 'user' 
                       ? 'bg-purple-600 text-white' 
                       : 'bg-muted'
                   }`}>
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                     <p className={`text-xs mt-1 ${
                       message.sender === 'user' 
                         ? 'text-purple-200' 
@@ -147,7 +146,7 @@ export const TestBot = ({ chatbot }: TestBotProps) => {
                   )}
                 </div>
               ))}
-              
+
               {isLoading && (
                 <div className="flex items-start space-x-2">
                   <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
@@ -162,27 +161,30 @@ export const TestBot = ({ chatbot }: TestBotProps) => {
                   </Card>
                 </div>
               )}
+
+              {/* Âncora para scroll automático */}
+              <div ref={bottomRef} />
             </div>
           </ScrollArea>
-          
-          {/* Input de mensagem */}
-          <div className="flex space-x-2 pt-4 border-t">
-            <Input
-              placeholder="Digite sua mensagem..."
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={isLoading}
-              className="flex-1"
-            />
-            <Button 
-              onClick={sendMessage}
-              disabled={!inputMessage.trim() || isLoading}
-              size="icon"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
+        </div>
+
+        {/* Input de mensagem */}
+        <div className="flex space-x-2 pt-4 border-t px-4">
+          <Input
+            placeholder="Digite sua mensagem..."
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isLoading}
+            className="flex-1"
+          />
+          <Button 
+            onClick={sendMessage}
+            disabled={!inputMessage.trim() || isLoading}
+            size="icon"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

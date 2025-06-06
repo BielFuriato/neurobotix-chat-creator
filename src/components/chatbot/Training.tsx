@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { OllamaStatus } from '@/components/OllamaStatus';
 import { 
@@ -30,9 +31,20 @@ export const Training = ({ chatbot }: TrainingProps) => {
   const [customKnowledge, setCustomKnowledge] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [newFaq, setNewFaq] = useState({ question: '', answer: '' });
-  const [isLoading, setIsLoading] = useState(false);
   const [documents, setDocuments] = useState<KnowledgeBase[]>([]);
   const { toast } = useToast();
+
+  // Estados de loading individuais
+  const [isFileUploading, setIsFileUploading] = useState(false);
+  const [isUrlAdding, setIsUrlAdding] = useState(false);
+  const [isFaqAdding, setIsFaqAdding] = useState(false);
+  const [isKnowledgeSaving, setIsKnowledgeSaving] = useState(false);
+
+  // Estados de progresso individuais
+  const [fileUploadProgress, setFileUploadProgress] = useState(0);
+  const [urlAddProgress, setUrlAddProgress] = useState(0);
+  const [faqAddProgress, setFaqAddProgress] = useState(0);
+  const [knowledgeSaveProgress, setKnowledgeSaveProgress] = useState(0);
 
   // Carregar documentos ao montar componente
   useEffect(() => {
@@ -52,9 +64,16 @@ export const Training = ({ chatbot }: TrainingProps) => {
     const files = event.target.files;
     if (!files) return;
 
-    setIsLoading(true);
+    setIsFileUploading(true);
+    setFileUploadProgress(0);
     try {
-      await trainingService.processFileUpload(files, parseInt(chatbot.id));
+      await trainingService.processFileUpload(
+        files, 
+        parseInt(chatbot.id),
+        (progress) => {
+          setFileUploadProgress(progress);
+        }
+      );
       await loadDocuments();
       
       toast({
@@ -68,8 +87,8 @@ export const Training = ({ chatbot }: TrainingProps) => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
-      // Limpar input
+      setIsFileUploading(false);
+      setFileUploadProgress(0);
       event.target.value = '';
     }
   };
@@ -77,9 +96,16 @@ export const Training = ({ chatbot }: TrainingProps) => {
   const handleAddUrl = async () => {
     if (!newUrl) return;
     
-    setIsLoading(true);
+    setIsUrlAdding(true);
+    setUrlAddProgress(0);
     try {
-      await trainingService.processUrl(newUrl, parseInt(chatbot.id));
+      await trainingService.processUrl(
+        newUrl, 
+        parseInt(chatbot.id),
+        (progress) => {
+          setUrlAddProgress(progress);
+        }
+      );
       await loadDocuments();
       setNewUrl('');
       
@@ -94,16 +120,25 @@ export const Training = ({ chatbot }: TrainingProps) => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsUrlAdding(false);
+      setUrlAddProgress(0);
     }
   };
 
   const handleAddFaq = async () => {
     if (!newFaq.question || !newFaq.answer) return;
     
-    setIsLoading(true);
+    setIsFaqAdding(true);
+    setFaqAddProgress(0);
     try {
-      await trainingService.addFaq(newFaq.question, newFaq.answer, parseInt(chatbot.id));
+      await trainingService.addFaq(
+        newFaq.question, 
+        newFaq.answer, 
+        parseInt(chatbot.id),
+        (progress) => {
+          setFaqAddProgress(progress);
+        }
+      );
       await loadDocuments();
       setNewFaq({ question: '', answer: '' });
       
@@ -118,16 +153,24 @@ export const Training = ({ chatbot }: TrainingProps) => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsFaqAdding(false);
+      setFaqAddProgress(0);
     }
   };
 
   const handleSaveKnowledge = async () => {
     if (!customKnowledge.trim()) return;
 
-    setIsLoading(true);
+    setIsKnowledgeSaving(true);
+    setKnowledgeSaveProgress(0);
     try {
-      await trainingService.addCustomKnowledge(customKnowledge, parseInt(chatbot.id));
+      await trainingService.addCustomKnowledge(
+        customKnowledge, 
+        parseInt(chatbot.id),
+        (progress) => {
+          setKnowledgeSaveProgress(progress);
+        }
+      );
       await loadDocuments();
       setCustomKnowledge('');
       
@@ -142,7 +185,8 @@ export const Training = ({ chatbot }: TrainingProps) => {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsKnowledgeSaving(false);
+      setKnowledgeSaveProgress(0);
     }
   };
 
@@ -268,13 +312,26 @@ export const Training = ({ chatbot }: TrainingProps) => {
               onChange={handleFileUpload}
               className="hidden"
               id="file-upload"
-              disabled={isLoading}
+              disabled={isFileUploading}
             />
-            <Button asChild disabled={isLoading}>
+            <Button asChild disabled={isFileUploading}>
               <label htmlFor="file-upload" className="cursor-pointer">
-                {isLoading ? "Processando..." : "Selecionar Arquivos"}
+                {isFileUploading ? (
+                  <span className="flex items-center">
+                    <Clock className="w-4 h-4 mr-2 animate-spin" />
+                    Processando...
+                  </span>
+                ) : "Selecionar Arquivos"}
               </label>
             </Button>
+            {isFileUploading && (
+              <div className="mt-4">
+                <Progress value={fileUploadProgress} className="h-2" />
+                <p className="text-sm text-muted-foreground mt-1">
+                  {fileUploadProgress}% concluído
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -297,13 +354,30 @@ export const Training = ({ chatbot }: TrainingProps) => {
               value={newUrl}
               onChange={(e) => setNewUrl(e.target.value)}
               className="flex-1"
-              disabled={isLoading}
+              disabled={isUrlAdding}
             />
-            <Button onClick={handleAddUrl} disabled={isLoading || !newUrl}>
-              <Plus className="w-4 h-4 mr-2" />
-              {isLoading ? "Adicionando..." : "Adicionar"}
+            <Button onClick={handleAddUrl} disabled={isUrlAdding || !newUrl}>
+              {isUrlAdding ? (
+                <span className="flex items-center">
+                  <Clock className="w-4 h-4 mr-2 animate-spin" />
+                  Adicionando...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar
+                </span>
+              )}
             </Button>
           </div>
+          {isUrlAdding && (
+            <div className="mt-4">
+              <Progress value={urlAddProgress} className="h-2" />
+              <p className="text-sm text-muted-foreground mt-1">
+                {urlAddProgress}% concluído
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -325,7 +399,7 @@ export const Training = ({ chatbot }: TrainingProps) => {
               placeholder="Como posso cancelar meu pedido?"
               value={newFaq.question}
               onChange={(e) => setNewFaq({...newFaq, question: e.target.value})}
-              disabled={isLoading}
+              disabled={isFaqAdding}
             />
           </div>
           <div className="space-y-2">
@@ -335,16 +409,33 @@ export const Training = ({ chatbot }: TrainingProps) => {
               value={newFaq.answer}
               onChange={(e) => setNewFaq({...newFaq, answer: e.target.value})}
               rows={3}
-              disabled={isLoading}
+              disabled={isFaqAdding}
             />
           </div>
           <Button 
             onClick={handleAddFaq} 
-            disabled={isLoading || !newFaq.question || !newFaq.answer}
+            disabled={isFaqAdding || !newFaq.question || !newFaq.answer}
           >
-            <Plus className="w-4 h-4 mr-2" />
-            {isLoading ? "Adicionando..." : "Adicionar FAQ"}
+            {isFaqAdding ? (
+              <span className="flex items-center">
+                <Clock className="w-4 h-4 mr-2 animate-spin" />
+                Adicionando...
+              </span>
+            ) : (
+              <span className="flex items-center">
+                <Plus className="w-4 h-4 mr-2" />
+                Adicionar FAQ
+              </span>
+            )}
           </Button>
+          {isFaqAdding && (
+            <div className="mt-4">
+              <Progress value={faqAddProgress} className="h-2" />
+              <p className="text-sm text-muted-foreground mt-1">
+                {faqAddProgress}% concluído
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -365,14 +456,27 @@ export const Training = ({ chatbot }: TrainingProps) => {
             value={customKnowledge}
             onChange={(e) => setCustomKnowledge(e.target.value)}
             rows={6}
-            disabled={isLoading}
+            disabled={isKnowledgeSaving}
           />
           <Button 
             onClick={handleSaveKnowledge} 
-            disabled={isLoading || !customKnowledge.trim()}
+            disabled={isKnowledgeSaving || !customKnowledge.trim()}
           >
-            {isLoading ? "Salvando..." : "Salvar Conhecimento"}
+            {isKnowledgeSaving ? (
+              <span className="flex items-center">
+                <Clock className="w-4 h-4 mr-2 animate-spin" />
+                Salvando...
+              </span>
+            ) : "Salvar Conhecimento"}
           </Button>
+          {isKnowledgeSaving && (
+            <div className="mt-4">
+              <Progress value={knowledgeSaveProgress} className="h-2" />
+              <p className="text-sm text-muted-foreground mt-1">
+                {knowledgeSaveProgress}% concluído
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -417,7 +521,7 @@ export const Training = ({ chatbot }: TrainingProps) => {
                         variant="ghost"
                         size="sm"
                         onClick={() => removeDocument(doc.id!)}
-                        disabled={isLoading}
+                        disabled={isFileUploading || isUrlAdding || isFaqAdding || isKnowledgeSaving}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>

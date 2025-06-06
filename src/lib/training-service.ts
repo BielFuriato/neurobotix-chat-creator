@@ -1,226 +1,285 @@
+import { database, KnowledgeBase } from "./database";
+import { ollamaService } from "./ollama-service";
 
-import { database, KnowledgeBase } from './database';
-import { ollamaService } from './ollama-service';
-
-// Importar pdf-parse para extrair texto de PDFs
-let pdfParse: any = null;
-
-// Carregar pdf-parse dinamicamente
-const loadPdfParse = async () => {
-  if (!pdfParse) {
-    try {
-      pdfParse = (await import('pdf-parse')).default;
-      console.log('📚 pdf-parse carregado com sucesso');
-    } catch (error) {
-      console.error('❌ Erro ao carregar pdf-parse:', error);
-      throw new Error('Biblioteca PDF não disponível');
-    }
-  }
-  return pdfParse;
-};
+// Configuração simplificada do PDF.js para Vite
+const pdfjsLib = await import('pdfjs-dist');
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
 export class TrainingService {
-  // Processar upload de arquivos
-  async processFileUpload(files: FileList, chatbotId: number): Promise<void> {
-    console.log(`🔄 Iniciando processamento de ${files.length} arquivo(s) para chatbot ${chatbotId}`);
-    
+  /**
+   * Processa o upload de arquivos (PDFs, DOCs, TXTs)
+   */
+  async processFileUpload(
+    files: FileList, 
+    chatbotId: number,
+    progressCallback?: (progress: number) => void
+  ): Promise<void> {
+    console.log(`🔄 Iniciando processamento de ${files.length} arquivo(s)`);
+
+    const totalFiles = files.length;
+    let processedFiles = 0;
+
     for (const file of files) {
       try {
+        if (progressCallback) progressCallback((processedFiles / totalFiles) * 50);
+        
         console.log(`📄 Processando arquivo: ${file.name} (${file.type}, ${file.size} bytes)`);
+
+        let content = '';
         
-        const content = await this.extractTextFromFile(file);
-        console.log(`📝 Texto extraído (${content.length} caracteres):`, content.substring(0, 500) + '...');
-        
-        if (content.length < 10) {
-          console.warn(`⚠️ Arquivo ${file.name} tem conteúdo muito pequeno, pode não ter sido extraído corretamente`);
+        if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+          content = await this.extractTextFromPdf(file);
+        } else {
+          content = await this.readFileAsText(file);
         }
-        
-        const processedContent = await ollamaService.processDocument(content, file.name);
-        console.log(`🤖 Conteúdo processado pelo Ollama (${processedContent.length} caracteres):`, processedContent.substring(0, 300) + '...');
-        
-        const knowledgeId = await database.addKnowledge({
+
+        // Remove metadados e referências ao arquivo
+        content = this.cleanContent(content, file.name);
+
+        if (content.length < 10) {
+          throw new Error("O documento não contém texto suficiente");
+        }
+
+        if (progressCallback) progressCallback((processedFiles / totalFiles) * 80);
+
+        // Processa o conteúdo sem mencionar a origem
+        const processedContent = await ollamaService.processDocument(
+          content,
+          "Conteúdo extraído"
+        );
+
+        await database.addKnowledge({
           chatbotId,
-          sourceType: file.type.includes('pdf') ? 'pdf' : 'doc',
+          sourceType: "pdf",
           content: processedContent,
-          fileName: file.name,
-          uploadedAt: new Date().toISOString()
+          fileName: "Conhecimento de documento",
+          uploadedAt: new Date().toISOString(),
         });
-        
-        console.log(`✅ Conhecimento salvo no banco com ID: ${knowledgeId}`);
+
+        processedFiles++;
+        if (progressCallback) progressCallback((processedFiles / totalFiles) * 100);
+
       } catch (error) {
         console.error(`❌ Erro ao processar arquivo ${file.name}:`, error);
         throw error;
       }
     }
-    
-    console.log(`🎉 Processamento completo! Verificando base de conhecimento...`);
-    const allKnowledge = await this.getChatbotKnowledge(chatbotId);
-    console.log(`📚 Base de conhecimento atual (${allKnowledge.length} caracteres)`);
   }
 
-  // Extrair texto de arquivos com suporte real a PDF
-  private async extractTextFromFile(file: File): Promise<string> {
-    console.log(`🔍 Extraindo texto de: ${file.name} (${file.type})`);
-    
-    return new Promise(async (resolve, reject) => {
-      try {
-        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-          console.log(`📖 Processando PDF: ${file.name}`);
-          
-          // Carregar biblioteca PDF
-          const pdfParser = await loadPdfParse();
-          
-          // Converter arquivo para buffer
+  /**
+   * Extrai texto de PDFs usando pdf.js
+   */
+  private extractTextFromPdf(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const processPdf = async () => {
+        try {
           const arrayBuffer = await file.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
+          const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+          const pdf = await loadingTask.promise;
           
-          console.log(`🔧 Extraindo texto do PDF (${buffer.length} bytes)...`);
-          
-          // Extrair texto do PDF
-          const data = await pdfParser(buffer);
-          const extractedText = data.text || '';
-          
-          console.log(`✅ PDF processado: ${extractedText.length} caracteres extraídos`);
-          console.log(`📄 Preview do texto:`, extractedText.substring(0, 500) + '...');
-          
-          if (extractedText.length === 0) {
-            console.warn(`⚠️ PDF ${file.name} não contém texto extraível`);
-            resolve('PDF sem texto extraível ou protegido.');
-          } else {
-            resolve(extractedText);
+          let fullText = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            
+            // Filtra apenas itens que contém texto
+            const textItems = textContent.items.filter((item): item is { str: string } => 
+              'str' in item
+            );
+            
+            fullText += textItems.map(item => item.str).join(' ') + '\n\n';
+            page.cleanup();
           }
           
-        } else {
-          // Para arquivos de texto
-          console.log(`📄 Processando arquivo de texto: ${file.name}`);
-          
-          const reader = new FileReader();
-          
-          reader.onload = (e) => {
-            const content = e.target?.result as string;
-            console.log(`📄 Arquivo de texto processado: ${content ? content.length : 0} caracteres`);
-            resolve(content || '');
-          };
-          
-          reader.onerror = () => {
-            console.error(`❌ Erro ao ler arquivo ${file.name}:`, reader.error);
-            reject(new Error('Erro ao ler arquivo'));
-          };
-          
-          reader.readAsText(file);
+          resolve(fullText.trim());
+        } catch (error) {
+          console.error(`❌ Erro ao extrair texto do PDF:`, error);
+          reject(new Error(`Falha ao processar PDF: ${error instanceof Error ? error.message : String(error)}`));
         }
-      } catch (error) {
-        console.error(`❌ Erro ao extrair texto de ${file.name}:`, error);
-        reject(error);
-      }
+      };
+
+      processPdf().catch(reject);
     });
   }
 
-  // Processar URL
-  async processUrl(url: string, chatbotId: number): Promise<void> {
+  /**
+   * Limpa o conteúdo removendo metadados e referências
+   */
+  private cleanContent(content: string, filename: string): string {
+    // Remove referências ao nome do arquivo
+    let cleaned = content.replace(new RegExp(filename, 'gi'), '');
+    
+    // Remove metadados comuns
+    const metadataPatterns = [
+      /Creator:.*?\n/g,
+      /Producer:.*?\n/g,
+      /CreationDate:.*?\n/g,
+      /ModDate:.*?\n/g,
+      /Page \d+ of \d+/g,
+      /\d{1,3}\s+\/\s+\d{1,3}/g,
+      /^.*\.pdf$/gim
+    ];
+    
+    metadataPatterns.forEach(pattern => {
+      cleaned = cleaned.replace(pattern, '');
+    });
+    
+    return cleaned.trim();
+  }
+
+  /**
+   * Lê arquivos de texto (TXT, DOC, DOCX simplificado)
+   */
+  private readFileAsText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string || "");
+      reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
+      reader.readAsText(file);
+    });
+  }
+
+  /**
+   * Processa URLs para extrair conteúdo
+   */
+  async processUrl(
+    url: string, 
+    chatbotId: number, 
+    progressCallback?: (progress: number) => void
+  ): Promise<void> {
     try {
-      console.log(`🌐 Processando URL: ${url} para chatbot ${chatbotId}`);
+      if (progressCallback) progressCallback(30);
       
-      // Simula extração de conteúdo da URL
-      // Em produção, usaria um scraper ou serviço de extração
-      const content = `Conteúdo extraído de: ${url}`;
-      console.log(`📝 Conteúdo da URL (simulado): ${content}`);
+      const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      if (!response.ok) throw new Error(`Erro ao buscar URL: ${response.status}`);
+      
+      if (progressCallback) progressCallback(60);
+      
+      const data = await response.json();
+      const htmlContent = data.contents;
+      
+      if (!htmlContent) throw new Error("Nenhum conteúdo encontrado na URL");
+      
+      const textContent = this.extractTextFromHtml(htmlContent);
+      
+      if (progressCallback) progressCallback(80);
+      
+      const processedContent = await ollamaService.processDocument(
+        textContent,
+        "Conteúdo da web"
+      );
       
       await database.addKnowledge({
         chatbotId,
-        sourceType: 'url',
-        content: content,
+        sourceType: "url",
+        content: processedContent,
         fileName: url,
-        uploadedAt: new Date().toISOString()
+        uploadedAt: new Date().toISOString(),
       });
       
-      console.log(`✅ URL adicionada à base de conhecimento`);
+      if (progressCallback) progressCallback(100);
     } catch (error) {
-      console.error('❌ Erro ao processar URL:', error);
+      console.error("❌ Erro ao processar URL:", error);
       throw error;
     }
   }
 
-  // Adicionar FAQ
-  async addFaq(question: string, answer: string, chatbotId: number): Promise<void> {
-    const content = `PERGUNTA FREQUENTE:
-Pergunta: ${question}
-Resposta: ${answer}
-
-Esta é uma pergunta frequente que deve ser respondida exatamente como especificado acima.`;
+  /**
+   * Extrai texto de HTML
+   */
+  private extractTextFromHtml(html: string): string {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
     
-    console.log(`❓ Adicionando FAQ para chatbot ${chatbotId}:`, content);
+    // Remove elementos desnecessários
+    const elementsToRemove = temp.querySelectorAll('script, style, noscript, header, footer');
+    elementsToRemove.forEach(el => el.remove());
     
-    await database.addKnowledge({
-      chatbotId,
-      sourceType: 'faq',
-      content: content,
-      fileName: `FAQ: ${question}`,
-      uploadedAt: new Date().toISOString()
-    });
-    
-    console.log(`✅ FAQ adicionada à base de conhecimento`);
+    return temp.textContent?.replace(/\s+/g, ' ').trim() || '';
   }
 
-  // Adicionar conhecimento personalizado
-  async addCustomKnowledge(content: string, chatbotId: number): Promise<void> {
-    console.log(`📝 Adicionando conhecimento personalizado para chatbot ${chatbotId} (${content.length} caracteres)`);
-    
-    const processedContent = await ollamaService.processDocument(content, 'Conhecimento Personalizado');
-    console.log(`🤖 Conhecimento processado pelo Ollama: ${processedContent.substring(0, 200)}...`);
-    
-    await database.addKnowledge({
-      chatbotId,
-      sourceType: 'custom',
-      content: processedContent,
-      fileName: 'Conhecimento Personalizado',
-      uploadedAt: new Date().toISOString()
-    });
-    
-    console.log(`✅ Conhecimento personalizado salvo`);
-  }
+  /**
+   * Adiciona uma FAQ à base de conhecimento
+   */
+  async addFaq(
+    question: string,
+    answer: string,
+    chatbotId: number,
+    progressCallback?: (progress: number) => void
+  ): Promise<void> {
+    try {
+      if (progressCallback) progressCallback(30);
+      
+      const content = `Pergunta: ${question}\nResposta: ${answer}`;
 
-  // Obter todo o conhecimento de um chatbot formatado para o Ollama
-  async getChatbotKnowledge(chatbotId: number): Promise<string> {
-    console.log(`📚 Buscando conhecimento para chatbot ${chatbotId}`);
-    
-    const knowledgeItems = await database.getKnowledgeByChatbotId(chatbotId);
-    console.log(`📊 Encontrados ${knowledgeItems.length} itens de conhecimento`);
-    
-    if (knowledgeItems.length === 0) {
-      console.log(`⚠️ Nenhum conhecimento encontrado para chatbot ${chatbotId}`);
-      return 'Nenhum conhecimento específico foi fornecido. Responda de forma geral e educada.';
+      await database.addKnowledge({
+        chatbotId,
+        sourceType: "faq",
+        content: content,
+        fileName: `FAQ: ${question.substring(0, 50)}${question.length > 50 ? '...' : ''}`,
+        uploadedAt: new Date().toISOString(),
+      });
+
+      if (progressCallback) progressCallback(100);
+    } catch (error) {
+      console.error("❌ Erro ao adicionar FAQ:", error);
+      throw error;
     }
-
-    const formattedKnowledge = knowledgeItems
-      .map((item, index) => {
-        console.log(`📄 Item ${index + 1}: ${item.fileName} (${item.content.length} caracteres, tipo: ${item.sourceType})`);
-        return `=== DOCUMENTO: ${item.fileName} ===
-TIPO: ${item.sourceType.toUpperCase()}
-CONTEÚDO:
-${item.content}
-
----`;
-      })
-      .join('\n\n');
-
-    console.log(`📚 Base de conhecimento final: ${formattedKnowledge.length} caracteres total`);
-    return formattedKnowledge;
   }
 
-  // Listar documentos de treinamento
+  /**
+   * Adiciona conhecimento personalizado
+   */
+  async addCustomKnowledge(
+    content: string,
+    chatbotId: number,
+    progressCallback?: (progress: number) => void
+  ): Promise<void> {
+    try {
+      if (progressCallback) progressCallback(30);
+      
+      const processedContent = await ollamaService.processDocument(
+        content,
+        "Conhecimento personalizado"
+      );
+
+      await database.addKnowledge({
+        chatbotId,
+        sourceType: "custom",
+        content: processedContent,
+        fileName: "Conhecimento personalizado",
+        uploadedAt: new Date().toISOString(),
+      });
+
+      if (progressCallback) progressCallback(100);
+    } catch (error) {
+      console.error("❌ Erro ao adicionar conhecimento:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtém todo o conhecimento de um chatbot
+   */
+  async getChatbotKnowledge(chatbotId: number): Promise<string> {
+    const knowledgeItems = await database.getKnowledgeByChatbotId(chatbotId);
+    return knowledgeItems
+      .map(item => item.content)
+      .join("\n\n---\n\n");
+  }
+
+  /**
+   * Lista documentos de treinamento
+   */
   async getTrainingDocuments(chatbotId: number): Promise<KnowledgeBase[]> {
-    console.log(`📋 Listando documentos de treinamento para chatbot ${chatbotId}`);
-    const documents = await database.getKnowledgeByChatbotId(chatbotId);
-    console.log(`📊 Encontrados ${documents.length} documentos`);
-    return documents;
+    return await database.getKnowledgeByChatbotId(chatbotId);
   }
 
-  // Remover documento de treinamento
+  /**
+   * Remove documento de treinamento
+   */
   async removeTrainingDocument(id: number): Promise<void> {
-    console.log(`🗑️ Removendo documento de treinamento ID: ${id}`);
     await database.deleteKnowledge(id);
-    console.log(`✅ Documento removido`);
   }
 }
 
