@@ -1,6 +1,6 @@
 
 import { database, KnowledgeBase } from './database';
-import { gptService } from './gpt-service';
+import { ollamaService } from './ollama-service';
 
 export class TrainingService {
   // Processar upload de arquivos
@@ -8,7 +8,7 @@ export class TrainingService {
     for (const file of files) {
       try {
         const content = await this.extractTextFromFile(file);
-        const processedContent = await gptService.processDocument(content, file.name);
+        const processedContent = await ollamaService.processDocument(content, file.name);
         
         await database.addKnowledge({
           chatbotId,
@@ -88,7 +88,7 @@ export class TrainingService {
 
   // Adicionar conhecimento personalizado
   async addCustomKnowledge(content: string, chatbotId: number): Promise<void> {
-    const processedContent = await gptService.processDocument(content, 'Conhecimento Personalizado');
+    const processedContent = await ollamaService.processDocument(content, 'Conhecimento Personalizado');
     
     await database.addKnowledge({
       chatbotId,

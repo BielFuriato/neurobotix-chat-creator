@@ -1,6 +1,6 @@
 
 import { database, Interaction } from './database';
-import { gptService } from './gpt-service';
+import { ollamaService } from './ollama-service';
 import { trainingService } from './training-service';
 
 export class ChatService {
@@ -10,11 +10,17 @@ export class ChatService {
     chatbotName: string = 'Assistente'
   ): Promise<string> {
     try {
+      // Verificar se o Ollama está rodando
+      const isOllamaRunning = await ollamaService.checkHealth();
+      if (!isOllamaRunning) {
+        return 'Erro: Ollama não está rodando. Execute "ollama serve" no terminal e tente novamente.';
+      }
+
       // Obter conhecimento do chatbot
       const knowledge = await trainingService.getChatbotKnowledge(chatbotId);
       
-      // Gerar resposta usando GPT
-      const botResponse = await gptService.generateResponse(
+      // Gerar resposta usando Ollama
+      const botResponse = await ollamaService.generateResponse(
         userMessage, 
         knowledge, 
         chatbotName
@@ -31,7 +37,7 @@ export class ChatService {
       return botResponse;
     } catch (error) {
       console.error('Erro no chat service:', error);
-      return 'Desculpe, ocorreu um erro. Tente novamente.';
+      return 'Desculpe, ocorreu um erro. Verifique se o Ollama está rodando.';
     }
   }
 

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { OllamaStatus } from '@/components/OllamaStatus';
 import { 
   Upload, 
   FileText, 
@@ -201,6 +201,9 @@ export const Training = ({ chatbot }: TrainingProps) => {
 
   return (
     <div className="space-y-6">
+      {/* Status do Ollama */}
+      <OllamaStatus />
+
       {/* Estatísticas de Treinamento */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -427,21 +430,26 @@ export const Training = ({ chatbot }: TrainingProps) => {
         </CardContent>
       </Card>
 
-      {/* Instruções para API */}
-      <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+      {/* Instruções para Ollama */}
+      <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
         <CardHeader>
-          <CardTitle className="flex items-center text-amber-800 dark:text-amber-200">
+          <CardTitle className="flex items-center text-blue-800 dark:text-blue-200">
             <AlertCircle className="w-5 h-5 mr-2" />
-            Configuração da API OpenAI
+            Configuração do Ollama
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-amber-700 dark:text-amber-300">
-            Para que o chatbot funcione, você precisa configurar sua chave da API OpenAI no arquivo 
-            <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded mx-1">src/lib/gpt-service.ts</code>.
-            Substitua <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded mx-1">YOUR_API_KEY</code> 
-            pela sua chave real da OpenAI.
-          </p>
+          <div className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
+            <p>Para usar o Ollama localmente:</p>
+            <ol className="list-decimal list-inside space-y-1 ml-4">
+              <li>Instale o Ollama: <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer" className="underline">ollama.ai</a></li>
+              <li>Execute: <code className="bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded">ollama pull llama3.2:3b</code></li>
+              <li>Inicie o servidor: <code className="bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded">ollama serve</code></li>
+            </ol>
+            <p className="mt-2">
+              O Ollama roda localmente sem custos e seus dados ficam privados na sua máquina.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
