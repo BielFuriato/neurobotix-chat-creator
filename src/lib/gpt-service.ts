@@ -1,7 +1,7 @@
 
 // Configuração da API do OpenAI GPT
 // IMPORTANTE: Substitua YOUR_API_KEY pela sua chave real da OpenAI
-const OPENAI_API_KEY = 'YOUR_API_KEY'; // Coloque sua chave aqui
+const OPENAI_API_KEY = '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'; // Coloque sua chave aqui
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 interface GPTMessage {
