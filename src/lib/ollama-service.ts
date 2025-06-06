@@ -28,38 +28,53 @@ export class OllamaService {
     console.log(`🤖 Ollama - Gerando resposta com modelo: ${this.model}`);
     console.log(`👤 Usuário: "${userMessage}"`);
     console.log(`🤖 Chatbot: ${chatbotName}`);
-    console.log(`📚 Contexto (${context.length} caracteres):`, context.substring(0, 300) + '...');
+    console.log(`📚 Contexto (${context.length} caracteres):`, context.substring(0, 500) + '...');
     
     try {
-      // Sistema de prompt que incorpora o conhecimento treinado
-      const systemPrompt = `Você é ${chatbotName}, um assistente virtual inteligente.
-      
-CONHECIMENTO BASE:
+      // Sistema de prompt melhorado para usar o conhecimento de forma mais efetiva
+      const systemPrompt = `Você é ${chatbotName}, um assistente virtual especializado e inteligente.
+
+IMPORTANTE: Use APENAS as informações da BASE DE CONHECIMENTO abaixo para responder. NÃO invente informações.
+
+BASE DE CONHECIMENTO:
 ${context}
 
-INSTRUÇÕES:
-- Use APENAS as informações fornecidas no conhecimento base para responder
-- Se a pergunta não puder ser respondida com as informações disponíveis, diga: "Desculpe, não tenho informações suficientes para responder essa pergunta. Posso ajudá-lo com algo mais?"
-- Seja cordial, profissional e direto
-- Mantenha respostas concisas mas completas
-- Se apropriado, ofereça informações relacionadas que possam ser úteis`;
+INSTRUÇÕES DE RESPOSTA:
+1. Leia cuidadosamente a pergunta do usuário
+2. Procure na base de conhecimento acima por informações relevantes
+3. Se encontrar informações relevantes, responda de forma completa e precisa
+4. Se NÃO encontrar informações na base de conhecimento, responda: "Desculpe, não tenho informações específicas sobre isso na minha base de conhecimento atual. Posso ajudá-lo com algo mais relacionado ao que foi treinado?"
+5. Seja cordial, profissional e direto
+6. Use apenas fatos da base de conhecimento, nunca invente informações
+7. Se apropriado, cite o documento de origem da informação
 
-      const fullPrompt = `${systemPrompt}\n\nUsuário: ${userMessage}\nAssistente:`;
+REGRAS IMPORTANTES:
+- NUNCA invente preços, horários, políticas ou informações não presentes na base
+- SEMPRE baseie suas respostas no conhecimento fornecido
+- Se a pergunta for muito vaga, peça esclarecimentos
+- Mantenha um tom profissional e prestativo`;
+
+      const fullPrompt = `${systemPrompt}
+
+PERGUNTA DO USUÁRIO: ${userMessage}
+
+RESPOSTA (baseada apenas na base de conhecimento):`;
       
-      console.log(`📝 Prompt completo (${fullPrompt.length} caracteres):`, fullPrompt.substring(0, 500) + '...');
+      console.log(`📝 Prompt completo gerado (${fullPrompt.length} caracteres)`);
 
       const requestBody = {
         model: this.model,
         prompt: fullPrompt,
         stream: false,
         options: {
-          temperature: 0.7,
-          top_p: 0.9,
-          max_tokens: 500
+          temperature: 0.3, // Mais baixo para respostas mais precisas
+          top_p: 0.8,
+          max_tokens: 800,
+          stop: ['PERGUNTA DO USUÁRIO:', 'BASE DE CONHECIMENTO:']
         }
       };
       
-      console.log(`🚀 Enviando requisição para Ollama:`, requestBody);
+      console.log(`🚀 Enviando requisição para Ollama...`);
 
       const response = await fetch(OLLAMA_API_URL, {
         method: 'POST',
@@ -76,9 +91,9 @@ INSTRUÇÕES:
       }
 
       const data: OllamaResponse = await response.json();
-      console.log(`✅ Resposta do Ollama:`, data);
+      console.log(`✅ Resposta bruta do Ollama:`, data);
       
-      const finalResponse = data.response || 'Desculpe, não consegui gerar uma resposta.';
+      const finalResponse = data.response?.trim() || 'Desculpe, não consegui gerar uma resposta adequada.';
       console.log(`📤 Resposta final: "${finalResponse}"`);
       
       return finalResponse;

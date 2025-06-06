@@ -25,16 +25,22 @@ export class ChatService {
       console.log(`📚 Obtendo base de conhecimento do chatbot...`);
       const knowledge = await trainingService.getChatbotKnowledge(chatbotId);
       console.log(`📊 Conhecimento obtido: ${knowledge.length} caracteres`);
-      console.log(`📝 Preview do conhecimento:`, knowledge.substring(0, 500) + '...');
+      
+      if (knowledge.length > 100) {
+        console.log(`📝 Preview do conhecimento:`, knowledge.substring(0, 800) + '...');
+        console.log(`📈 Base de conhecimento contém dados substanciais para resposta`);
+      } else {
+        console.warn(`⚠️ Base de conhecimento muito pequena, chatbot pode não ter informações suficientes`);
+      }
       
       // Gerar resposta usando Ollama
-      console.log(`🤖 Enviando para Ollama...`);
+      console.log(`🤖 Enviando pergunta para Ollama com contexto completo...`);
       const botResponse = await ollamaService.generateResponse(
         userMessage, 
         knowledge, 
         chatbotName
       );
-      console.log(`✅ Resposta do Ollama: "${botResponse}"`);
+      console.log(`✅ Resposta do Ollama recebida: "${botResponse.substring(0, 200)}..."`);
 
       // Salvar interação no banco
       console.log(`💾 Salvando interação no banco...`);
@@ -44,12 +50,12 @@ export class ChatService {
         botResponse: botResponse,
         timestamp: new Date().toISOString()
       });
-      console.log(`✅ Interação salva`);
+      console.log(`✅ Interação salva com sucesso`);
 
       return botResponse;
     } catch (error) {
       console.error('❌ Erro no chat service:', error);
-      return 'Desculpe, ocorreu um erro. Verifique se o Ollama está rodando.';
+      return 'Desculpe, ocorreu um erro interno. Verifique se o Ollama está rodando e tente novamente.';
     }
   }
 

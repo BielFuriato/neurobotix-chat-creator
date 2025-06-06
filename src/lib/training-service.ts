@@ -2,6 +2,23 @@
 import { database, KnowledgeBase } from './database';
 import { ollamaService } from './ollama-service';
 
+// Importar pdf-parse para extrair texto de PDFs
+let pdfParse: any = null;
+
+// Carregar pdf-parse dinamicamente
+const loadPdfParse = async () => {
+  if (!pdfParse) {
+    try {
+      pdfParse = (await import('pdf-parse')).default;
+      console.log('📚 pdf-parse carregado com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao carregar pdf-parse:', error);
+      throw new Error('Biblioteca PDF não disponível');
+    }
+  }
+  return pdfParse;
+};
+
 export class TrainingService {
   // Processar upload de arquivos
   async processFileUpload(files: FileList, chatbotId: number): Promise<void> {
@@ -9,13 +26,17 @@ export class TrainingService {
     
     for (const file of files) {
       try {
-        console.log(`📄 Processando arquivo: ${file.name} (${file.type})`);
+        console.log(`📄 Processando arquivo: ${file.name} (${file.type}, ${file.size} bytes)`);
         
         const content = await this.extractTextFromFile(file);
-        console.log(`📝 Texto extraído (${content.length} caracteres):`, content.substring(0, 200) + '...');
+        console.log(`📝 Texto extraído (${content.length} caracteres):`, content.substring(0, 500) + '...');
+        
+        if (content.length < 10) {
+          console.warn(`⚠️ Arquivo ${file.name} tem conteúdo muito pequeno, pode não ter sido extraído corretamente`);
+        }
         
         const processedContent = await ollamaService.processDocument(content, file.name);
-        console.log(`🤖 Conteúdo processado pelo Ollama (${processedContent.length} caracteres):`, processedContent.substring(0, 200) + '...');
+        console.log(`🤖 Conteúdo processado pelo Ollama (${processedContent.length} caracteres):`, processedContent.substring(0, 300) + '...');
         
         const knowledgeId = await database.addKnowledge({
           chatbotId,
@@ -34,42 +55,63 @@ export class TrainingService {
     
     console.log(`🎉 Processamento completo! Verificando base de conhecimento...`);
     const allKnowledge = await this.getChatbotKnowledge(chatbotId);
-    console.log(`📚 Base de conhecimento atual (${allKnowledge.length} caracteres):`, allKnowledge.substring(0, 300) + '...');
+    console.log(`📚 Base de conhecimento atual (${allKnowledge.length} caracteres)`);
   }
 
-  // Extrair texto de arquivos
+  // Extrair texto de arquivos com suporte real a PDF
   private async extractTextFromFile(file: File): Promise<string> {
     console.log(`🔍 Extraindo texto de: ${file.name} (${file.type})`);
     
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
-        
-        if (file.type === 'application/pdf') {
-          // Para PDF, seria necessário uma biblioteca como pdf-parse
-          // Por simplicidade, vamos simular a extração
-          console.log(`⚠️ PDF detectado - usando extração simulada para ${file.name}`);
-          resolve(content || 'Conteúdo do PDF extraído - ATENÇÃO: Esta é uma simulação, o conteúdo real do PDF não está sendo lido corretamente');
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          console.log(`📖 Processando PDF: ${file.name}`);
+          
+          // Carregar biblioteca PDF
+          const pdfParser = await loadPdfParse();
+          
+          // Converter arquivo para buffer
+          const arrayBuffer = await file.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          
+          console.log(`🔧 Extraindo texto do PDF (${buffer.length} bytes)...`);
+          
+          // Extrair texto do PDF
+          const data = await pdfParser(buffer);
+          const extractedText = data.text || '';
+          
+          console.log(`✅ PDF processado: ${extractedText.length} caracteres extraídos`);
+          console.log(`📄 Preview do texto:`, extractedText.substring(0, 500) + '...');
+          
+          if (extractedText.length === 0) {
+            console.warn(`⚠️ PDF ${file.name} não contém texto extraível`);
+            resolve('PDF sem texto extraível ou protegido.');
+          } else {
+            resolve(extractedText);
+          }
+          
         } else {
           // Para arquivos de texto
-          console.log(`📄 Arquivo de texto processado: ${content ? content.length : 0} caracteres`);
-          resolve(content || '');
+          console.log(`📄 Processando arquivo de texto: ${file.name}`);
+          
+          const reader = new FileReader();
+          
+          reader.onload = (e) => {
+            const content = e.target?.result as string;
+            console.log(`📄 Arquivo de texto processado: ${content ? content.length : 0} caracteres`);
+            resolve(content || '');
+          };
+          
+          reader.onerror = () => {
+            console.error(`❌ Erro ao ler arquivo ${file.name}:`, reader.error);
+            reject(new Error('Erro ao ler arquivo'));
+          };
+          
+          reader.readAsText(file);
         }
-      };
-      
-      reader.onerror = () => {
-        console.error(`❌ Erro ao ler arquivo ${file.name}:`, reader.error);
-        reject(new Error('Erro ao ler arquivo'));
-      };
-      
-      if (file.type.includes('text') || file.name.endsWith('.txt')) {
-        reader.readAsText(file);
-      } else {
-        // Para outros tipos, simula extração
-        console.log(`⚠️ Tipo de arquivo não suportado completamente: ${file.type}`);
-        reader.readAsText(file);
+      } catch (error) {
+        console.error(`❌ Erro ao extrair texto de ${file.name}:`, error);
+        reject(error);
       }
     });
   }
@@ -101,7 +143,12 @@ export class TrainingService {
 
   // Adicionar FAQ
   async addFaq(question: string, answer: string, chatbotId: number): Promise<void> {
-    const content = `Pergunta: ${question}\nResposta: ${answer}`;
+    const content = `PERGUNTA FREQUENTE:
+Pergunta: ${question}
+Resposta: ${answer}
+
+Esta é uma pergunta frequente que deve ser respondida exatamente como especificado acima.`;
+    
     console.log(`❓ Adicionando FAQ para chatbot ${chatbotId}:`, content);
     
     await database.addKnowledge({
@@ -133,7 +180,7 @@ export class TrainingService {
     console.log(`✅ Conhecimento personalizado salvo`);
   }
 
-  // Obter todo o conhecimento de um chatbot formatado para o GPT
+  // Obter todo o conhecimento de um chatbot formatado para o Ollama
   async getChatbotKnowledge(chatbotId: number): Promise<string> {
     console.log(`📚 Buscando conhecimento para chatbot ${chatbotId}`);
     
@@ -148,7 +195,12 @@ export class TrainingService {
     const formattedKnowledge = knowledgeItems
       .map((item, index) => {
         console.log(`📄 Item ${index + 1}: ${item.fileName} (${item.content.length} caracteres, tipo: ${item.sourceType})`);
-        return `=== ${item.fileName} ===\n${item.content}`;
+        return `=== DOCUMENTO: ${item.fileName} ===
+TIPO: ${item.sourceType.toUpperCase()}
+CONTEÚDO:
+${item.content}
+
+---`;
       })
       .join('\n\n');
 
