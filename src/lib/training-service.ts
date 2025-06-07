@@ -150,13 +150,13 @@ export class TrainingService {
     try {
       if (progressCallback) progressCallback(30);
       
-      const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      // Agora usando seu backend como proxy
+      const response = await fetch(`http://localhost:3000/proxy?url=${encodeURIComponent(url)}`);
       if (!response.ok) throw new Error(`Erro ao buscar URL: ${response.status}`);
       
       if (progressCallback) progressCallback(60);
       
-      const data = await response.json();
-      const htmlContent = data.contents;
+      const htmlContent = await response.text();
       
       if (!htmlContent) throw new Error("Nenhum conteúdo encontrado na URL");
       

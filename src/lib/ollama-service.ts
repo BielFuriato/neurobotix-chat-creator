@@ -46,11 +46,12 @@ ${context}
 INSTRUÇÕES DE RESPOSTA:
 1. Leia cuidadosamente a pergunta do usuário.
 2. Procure na base de conhecimento acima por informações relevantes.
+4.  Priorize as perguntas e respostas FAQ, caso nao esteja lá, procure no restante da base de conhecimento.
 3. Se encontrar informações relevantes, responda de forma completa e precisa.
 4. Se NÃO encontrar informações na base de conhecimento, responda: "Desculpe, não tenho informações específicas sobre isso na minha base de conhecimento atual. Posso ajudá-lo com algo mais relacionado ao que foi treinado?"
 5. Seja cordial, profissional e direto.
 6. Use apenas fatos da base de conhecimento, nunca invente informações.
-7. Se apropriado, cite o documento de origem da informação.
+
 
 REGRAS IMPORTANTES:
 - NUNCA invente preços, horários, políticas ou informações não presentes na base.
@@ -62,7 +63,7 @@ REGRAS IMPORTANTES:
 
 PERGUNTA DO USUÁRIO: ${userMessage}
 
-RESPOSTA (baseada apenas na base de conhecimento):`;
+RESPOSTA (baseada apenas na base de conhecimento (contexto)):`;
 
       console.log(`📝 Prompt completo gerado (${fullPrompt.length} caracteres)`);
 
@@ -71,9 +72,9 @@ RESPOSTA (baseada apenas na base de conhecimento):`;
         prompt: fullPrompt,
         stream: false,
         options: {
-          temperature: 0.3, // Mais baixo para respostas mais precisas
+          temperature: 0.5, // Mais baixo para respostas mais precisas
           top_p: 0.8,
-          max_tokens: 800,
+          max_tokens: 2000,
           stop: ['PERGUNTA DO USUÁRIO:', 'BASE DE CONHECIMENTO:'],
         },
       };
